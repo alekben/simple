@@ -301,6 +301,33 @@ function log(message, className = '') {
     }
 }
 
+async function startComputePressureObserver() {
+    if (typeof PressureObserver === "undefined") {
+        log("Compute Pressure API not available in this browser");
+        return;
+    }
+    if (PressureObserver.knownSources?.length) {
+        log("Compute pressure known sources: " + PressureObserver.knownSources.join(", "));
+    }
+    const callback = (records) => {
+        for (const record of records) {
+            const parts = [
+                `state=${record.state}`,
+                record.source != null ? `source=${record.source}` : null,
+                record.time != null ? `time=${record.time}` : null,
+            ].filter(Boolean);
+            log("Compute pressure: " + parts.join(" "));
+        }
+    };
+    try {
+        const observer = new PressureObserver(callback);
+        await observer.observe("cpu", { sampleInterval: 1000 });
+        log("Compute pressure observer started (cpu, 1000ms sample interval)");
+    } catch (error) {
+        log("Compute pressure observer failed: " + error.message);
+    }
+}
+
 // Update AI agent transcript display
 function updateAgentTranscript(agentUid, transcriptText) {
     const agentContainer = document.getElementById(agentUid);
@@ -1357,6 +1384,8 @@ function startBasicCall() {
                 updateRemoteUserGrid();
             }
         });
+
+        startComputePressureObserver();
     };
 }
 
