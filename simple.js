@@ -17,6 +17,13 @@ let agentUid = null;
 let crd = null; // Geolocation
 let agentOn = false;
 
+// Agora AINS (AI denoiser) extension — script from Agora CDN; wasm under .../210/external/
+const AINS_ASSETS_PATH = "https://agora-packages.s3.us-west-2.amazonaws.com/ext/aidenoiser/210/external/";
+let ainsDenoiserExtension = null;
+let ainsProcessor = null;
+let ainsPipedTrack = null;
+let ainsUserEnabled = false;
+
 // Audio analysis variables for AI agent effects
 let audioContext = null;
 let analyser = null;
@@ -468,6 +475,10 @@ function updateButtonStates() {
             button.style.transform = 'scale(0.6)';
         }
     });
+    const ainsToggleButton = document.getElementById('ainsToggle');
+    if (ainsToggleButton && !ainsToggleButton.style.transform) {
+        ainsToggleButton.style.transform = 'scale(0.6)';
+    }
     
     // Ensure logsToggle button maintains its scale and update its state
     const logsToggleButton = document.getElementById('logsToggle');
@@ -491,6 +502,8 @@ function updateButtonStates() {
             }
         }
     }
+
+    updateAinsButton();
 }
 
 // Handle microphone capture toggle
@@ -561,16 +574,136 @@ async function toggleCameraMute() {
     }
 }
 
+function ensureAinsExtensionRegistered() {
+    if (typeof AIDenoiser === "undefined" || !AIDenoiser.AIDenoiserExtension) {
+        log("AINS extension not loaded (check script URL)");
+        return false;
+    }
+    if (!ainsDenoiserExtension) {
+        ainsDenoiserExtension = new AIDenoiser.AIDenoiserExtension({
+            assetsPath: AINS_ASSETS_PATH,
+        });
+        ainsDenoiserExtension.onloaderror = (err) => {
+            console.error("AINS extension error", err);
+            log("AINS extension failed to load WASM or worklet");
+        };
+        AgoraRTC.registerExtensions([ainsDenoiserExtension]);
+    }
+    return true;
+}
+
+async function teardownAinsProcessor() {
+    if (!ainsProcessor) {
+        ainsPipedTrack = null;
+        ainsUserEnabled = false;
+        return;
+    }
+    const pipedTrack = ainsPipedTrack;
+    try {
+        if (pipedTrack) {
+            await pipedTrack.unpipe();
+        }
+    } catch (e) {
+        console.warn("AINS track unpipe:", e);
+    }
+    try {
+        await ainsProcessor.unpipe();
+    } catch (e) {
+        console.warn("AINS processor unpipe:", e);
+    }
+    try {
+        await ainsProcessor.destroy();
+    } catch (e) {
+        console.warn("AINS processor destroy:", e);
+    }
+    ainsProcessor = null;
+    ainsPipedTrack = null;
+    ainsUserEnabled = false;
+}
+
+async function setupAinsForLocalMic(audioTrack) {
+    await teardownAinsProcessor();
+    if (!audioTrack) {
+        updateAinsButton();
+        return;
+    }
+    if (!ensureAinsExtensionRegistered()) {
+        updateAinsButton();
+        return;
+    }
+    try {
+        ainsProcessor = ainsDenoiserExtension.createProcessor();
+        ainsProcessor.onoverload = async () => {
+            log("AINS overload; turning off");
+            try {
+                await ainsProcessor.disable();
+                ainsUserEnabled = false;
+            } catch (e) {
+                console.error(e);
+            }
+            updateAinsButton();
+        };
+        audioTrack.pipe(ainsProcessor).pipe(audioTrack.processorDestination);
+        ainsPipedTrack = audioTrack;
+        await ainsProcessor.disable();
+        ainsUserEnabled = false;
+        log("AINS processor attached (off); use the control bar to enable");
+    } catch (e) {
+        console.error("AINS setup failed", e);
+        log("AINS setup failed: " + e.message);
+        await teardownAinsProcessor();
+    }
+    updateAinsButton();
+}
+
+async function toggleAinsProcessor() {
+    if (!localAudioTrack || !ainsProcessor) return;
+    try {
+        if (ainsUserEnabled) {
+            await ainsProcessor.disable();
+            ainsUserEnabled = false;
+            log("AINS disabled");
+        } else {
+            await ainsProcessor.enable();
+            await ainsProcessor.setMode("STATIONARY_NS");
+            await ainsProcessor.setLevel("SOFT");
+            ainsUserEnabled = true;
+            log("AINS enabled");
+        }
+    } catch (e) {
+        console.error("AINS toggle failed", e);
+        log("AINS toggle failed: " + e.message);
+        ainsUserEnabled = false;
+    }
+    updateAinsButton();
+}
+
+function updateAinsButton() {
+    const btn = document.getElementById("ainsToggle");
+    if (!btn) return;
+    const svg = btn.querySelector("svg");
+    const canUse = !!localAudioTrack && !!ainsProcessor;
+    btn.disabled = !canUse;
+    btn.title = canUse
+        ? (ainsUserEnabled ? "Turn off AI noise suppression (AINS)" : "Turn on AI noise suppression (AINS)")
+        : "AINS needs a local microphone track";
+    if (svg) {
+        svg.style.stroke = !canUse ? "grey" : ainsUserEnabled ? "#00c2ff" : "white";
+    }
+}
+
 // Create local audio and video tracks
 async function createLocalTracks() {
     log("createLocalTracks");
     try {
         localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
         localVideoTrack = await AgoraRTC.createCameraVideoTrack({encoderConfig: "720p_3"});
-        
-        // Ensure tracks are enabled
+
+        // Ensure tracks are enabled before attaching audio processors
         await localAudioTrack.setEnabled(true);
         await localVideoTrack.setEnabled(true);
+
+        await setupAinsForLocalMic(localAudioTrack);
         
         // Update user state to match track state
         userState.isMicCapturing = true;
@@ -984,6 +1117,8 @@ function updateUserState(uid, micState, camState) {
 
 // Leave the channel and clean up
 async function leaveChannel() {
+    await teardownAinsProcessor();
+
     // Close local tracks
     if (localAudioTrack) {
         localAudioTrack.close();
@@ -1021,10 +1156,9 @@ async function leaveChannel() {
     const muteMicButton = document.getElementById('muteMic');
     const captureCameraButton = document.getElementById('captureCamera');
     const muteCameraButton = document.getElementById('muteCamera');
-    const aiStatus = aiButton.querySelector('.ai-status');
-    const aiIcon = aiButton.querySelector('svg');
+    const aiButton = document.getElementById('aiButton');
 
-    if (captureMicButton && muteMicButton && captureCameraButton && muteCameraButton) {
+    if (captureMicButton && muteMicButton && captureCameraButton && muteCameraButton && aiButton) {
         [captureMicButton, muteMicButton, captureCameraButton, muteCameraButton].forEach(btn => btn.disabled = true);
         
         const micStatus = captureMicButton.querySelector('.mic-status');
@@ -1042,9 +1176,15 @@ async function leaveChannel() {
         }
     }
 
-    aiButton.disabled = true;
-    aiStatus.className = 'ai-status not-joined';
-    aiIcon.style.stroke = 'black';
+    if (aiButton) {
+        const aiStatus = aiButton.querySelector('.ai-status');
+        const aiIcon = aiButton.querySelector('svg');
+        if (aiStatus && aiIcon) {
+            aiButton.disabled = true;
+            aiStatus.className = 'ai-status not-joined';
+            aiIcon.style.stroke = 'black';
+        }
+    }
     
     // Reset logs toggle button state
     const logsToggleButton = document.getElementById('logsToggle');
@@ -1088,6 +1228,8 @@ async function leaveChannel() {
         microphoneSelect.disabled = true;
         microphoneSelect.innerHTML = '<option value="">Select Microphone</option>';
     }
+
+    updateAinsButton();
 }
 
 // Set up button click handlers
@@ -1125,6 +1267,10 @@ function setupButtonHandlers() {
     leaveButton.onclick = leaveChannel;
     document.getElementById("captureMic").onclick = toggleMicrophoneCapture;
     document.getElementById("muteMic").onclick = toggleMicrophoneMute;
+    const ainsToggleEl = document.getElementById("ainsToggle");
+    if (ainsToggleEl) {
+        ainsToggleEl.onclick = () => { toggleAinsProcessor(); };
+    }
     document.getElementById("captureCamera").onclick = toggleCameraCapture;
     document.getElementById("muteCamera").onclick = toggleCameraMute;
 
@@ -1180,8 +1326,15 @@ function setupButtonHandlers() {
                     
                     log(`Switching microphone from: ${previousDeviceName} (${previousDeviceId}) to: ${newDeviceName} (${newDeviceId})`);
                     
-                    // Try to switch to new microphone
+                    if (ainsUserEnabled && ainsProcessor) {
+                        await ainsProcessor.disable();
+                    }
                     await localAudioTrack.setDevice(e.target.value);
+                    if (ainsUserEnabled && ainsProcessor) {
+                        await ainsProcessor.enable();
+                        await ainsProcessor.setMode("STATIONARY_NS");
+                        await ainsProcessor.setLevel("SOFT");
+                    }
                     log(`Successfully switched to microphone: ${newDeviceName} (${newDeviceId})`);
                 } catch (error) {
                     console.error('Error switching microphone:', error);
@@ -1205,7 +1358,7 @@ function setupButtonHandlers() {
     }
 
     // Add hover animations for control buttons
-    const controlButtons = ['captureMic', 'muteMic', 'captureCamera', 'muteCamera', 'aiButton', 'logsToggle'];
+    const controlButtons = ['captureMic', 'muteMic', 'ainsToggle', 'captureCamera', 'muteCamera', 'aiButton', 'logsToggle'];
     controlButtons.forEach(buttonId => {
         const button = document.getElementById(buttonId);
         if (button) {

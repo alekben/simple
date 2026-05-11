@@ -289,6 +289,12 @@
                     <line x1="8" y1="23" x2="16" y2="23"/>
                 </svg>
             </button>
+            <button id="ainsToggle" class="control-button" title="AI noise suppression (AINS)" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="grey" stroke-width="2">
+                    <path d="M4 10c2-4 4-6 8-6s6 2 8 6c-2 4-4 6-8 6s-6-2-8-6z"/>
+                    <path d="M9 10h6M12 7v6"/>
+                </svg>
+            </button>
             <button id="captureCamera" class="control-button" title="Enable/Disable Camera" disabled>
                 <div class="camera-status not-joined"></div>
                 <svg viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2">
@@ -357,6 +363,7 @@
     <div id="shareLinkModal" style="display:none; position:absolute; top:90px; left:80px; z-index:1000;"></div>
     <!-- Include the JavaScript file -->
     <script src="https://download.agora.io/sdk/release/AgoraRTC_N.js"></script>
+    <script src="https://agora-packages.s3.us-west-2.amazonaws.com/ext/aidenoiser/210/index.js"></script>
     <script src="./simple.js"></script>
     <script>
     // Header animation logic
