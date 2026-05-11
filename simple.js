@@ -665,8 +665,8 @@ async function toggleAinsProcessor() {
             log("AINS disabled");
         } else {
             await ainsProcessor.enable();
-            await ainsProcessor.setMode("STATIONARY_NS");
-            await ainsProcessor.setLevel("SOFT");
+            await ainsProcessor.setMode("NSNG");
+            //await ainsProcessor.setLevel("SOFT");
             ainsUserEnabled = true;
             log("AINS enabled");
         }
@@ -1332,8 +1332,8 @@ function setupButtonHandlers() {
                     await localAudioTrack.setDevice(e.target.value);
                     if (ainsUserEnabled && ainsProcessor) {
                         await ainsProcessor.enable();
-                        await ainsProcessor.setMode("STATIONARY_NS");
-                        await ainsProcessor.setLevel("SOFT");
+                        await ainsProcessor.setMode("NSNG");
+                        //await ainsProcessor.setLevel("SOFT");
                     }
                     log(`Successfully switched to microphone: ${newDeviceName} (${newDeviceId})`);
                 } catch (error) {
