@@ -222,7 +222,7 @@ function setupEventListeners() {
     });
 
     client.on("user-published", async (user, mediaType) => {
-        //log(`subscribing to user ${user.uid} ${mediaType}`);
+        log(`subscribing to user ${user.uid} ${mediaType}`);
         await client.subscribe(user, mediaType);
         console.log("subscribe success");
         // Update user state in usersInChannel
@@ -252,7 +252,7 @@ function setupEventListeners() {
     });
 
     client.on("user-unpublished", (user, mediaType) => {
-        //log(`unsubscribing from user ${user.uid} ${mediaType}`);
+        log(`unsubscribing from user ${user.uid} ${mediaType}`);
         // Update user state in usersInChannel
         const idx = usersInChannel.findIndex(u => u.uid === user.uid);
         if (idx !== -1) {
@@ -536,7 +536,7 @@ async function toggleCameraMute() {
 
 // Create local audio and video tracks
 async function createLocalTracks() {
-    //log("createLocalTracks");
+    log("createLocalTracks");
     try {
         localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
         localVideoTrack = await AgoraRTC.createCameraVideoTrack({encoderConfig: "720p_3"});
@@ -561,7 +561,7 @@ async function createLocalTracks() {
 
 // Publish local audio and video tracks
 async function publishLocalTracks() {
-    //log("publishLocalTracks");
+    log("publishLocalTracks");
     await client.publish([localAudioTrack, localVideoTrack]);
 }
 
@@ -664,16 +664,16 @@ function displayLocalVideo() {
 function updateLocalVideoPosition() {
     const localPlayerContainer = document.getElementById(uid);
     if (!localPlayerContainer) return;
-    //log("updateLocalVideoPosition - localPlayerContainer true");
+    log("updateLocalVideoPosition - localPlayerContainer true");
 
     // Check if we are the first user (index 0) and if there are other users
     const isFirstUser = usersInChannel[0]?.uid === uid;
     const hasOtherUsers = usersInChannel.length > 1;
 
-    //log("updateLocalVideoPosition " + isFirstUser + " " + hasOtherUsers);
+    log("updateLocalVideoPosition " + isFirstUser + " " + hasOtherUsers);
     if (isFirstUser && hasOtherUsers) {
         // Shrink to bottom right
-        //log("updateLocalVideoPosition - Local user is first user and there are other users");
+        log("updateLocalVideoPosition - Local user is first user and there are other users");
         localPlayerContainer.style.transition = "all 0.3s ease-in-out";
         localPlayerContainer.style.width = "20%";
         localPlayerContainer.style.height = "20%";
@@ -684,7 +684,7 @@ function updateLocalVideoPosition() {
         localPlayerContainer.style.transform = "none";
     } else {
         // Expand from bottom right
-        //log("updateLocalVideoPosition - Local user is alone or not the first user");
+        log("updateLocalVideoPosition - Local user is alone or not the first user");
         localPlayerContainer.style.transition = "all 0.3s ease-in-out";
         localPlayerContainer.style.width = "100%";
         localPlayerContainer.style.height = "100%";
@@ -1113,7 +1113,7 @@ function setupButtonHandlers() {
                     const newDeviceId = e.target.value;
                     const newDeviceName = cameraDevices.get(newDeviceId) || 'Unknown Camera';
                     
-                    //log(`Switching camera from: ${previousDeviceName} (${previousDeviceId}) to: ${newDeviceName} (${newDeviceId})`);
+                    log(`Switching camera from: ${previousDeviceName} (${previousDeviceId}) to: ${newDeviceName} (${newDeviceId})`);
                     
                     // Try to switch to new camera
                     await localVideoTrack.setDevice(e.target.value);
@@ -1364,7 +1364,7 @@ function startBasicCall() {
 async function joinChannel() {
     try {
         //get cameras and mics and create local tracks first
-        //log("Getting cameras first time");
+        log("Getting cameras first time");
         // Get available cameras and populate dropdown
         try {
             const cameras = await AgoraRTC.getCameras();
@@ -1406,7 +1406,7 @@ async function joinChannel() {
             log('Error getting cameras: ' + error.message);
         }
 
-        //log("Getting microphones first time");
+        log("Getting microphones first time");
         try {
             const microphones = await AgoraRTC.getMicrophones();
             console.log("Available microphones:", microphones);
@@ -1420,7 +1420,7 @@ async function joinChannel() {
             });
             
             // Log the updated microphone devices map
-            //log("Updated microphone devices:");
+            log("Updated microphone devices:");
             //microphoneDevices.forEach((label, deviceId) => {
             //    log(`- ${label || 'Unnamed Microphone'} (${deviceId})`);
             //});
@@ -1468,7 +1468,7 @@ async function joinChannel() {
         if (!uidInput) {
             document.getElementById('uid').value = uid;
         }
-        //log(`Using channel name: ${channel}`);
+        log(`Using channel name: ${channel}`);
 
         //create local tracks next
         await createLocalTracks();
@@ -1477,7 +1477,7 @@ async function joinChannel() {
         displayLocalVideo();
 
         //join the channel with params
-        //log("Joining channel...");
+        log("Joining channel...");
 
         // Initialize client if needed
         if (!client) {
@@ -1486,7 +1486,7 @@ async function joinChannel() {
         
         await client.join(appId, channel, null, uid.toString());
         console.log(`Join resolved to UID: ${uid}.`);
-        //log(`Join resolved to UID: ${uid}.`);
+        log(`Join resolved to UID: ${uid}.`);
         
         // Track local user as index 0 in usersInChannel
         usersInChannel = [];
@@ -1564,7 +1564,7 @@ async function joinChannel() {
 // Add camera change listener
 AgoraRTC.on("camera-changed", async (info) => {
     console.log("Camera changed!", info.state, info.device);
-    //log(`Camera device changed: ${info.state} - Device: ${info.device.label || info.device.deviceId}`);
+    log(`Camera device changed: ${info.state} - Device: ${info.device.label || info.device.deviceId}`);
     if (info.state === "ACTIVE") {
         // Refresh camera list when a camera is connected
         await updateCameraList();
@@ -1574,7 +1574,7 @@ AgoraRTC.on("camera-changed", async (info) => {
 // Add microphone change listener
 AgoraRTC.on("microphone-changed", async (info) => {
     console.log("Microphone changed!", info.state, info.device);
-    //log(`Microphone device changed: ${info.state} - Device: ${info.device.label || info.device.deviceId}`);
+    log(`Microphone device changed: ${info.state} - Device: ${info.device.label || info.device.deviceId}`);
     if (info.state === "ACTIVE") {
         // Refresh microphone list when a microphone is connected
         await updateMicrophoneList();
@@ -1597,7 +1597,7 @@ async function updateCameraList() {
         });
         
         // Log the updated camera devices map
-        //log("Updated camera devices:");
+        log("Updated camera devices:");
         cameraDevices.forEach((label, deviceId) => {
             log(`- ${label || 'Unnamed Camera'} (${deviceId})`);
         });
@@ -1637,7 +1637,7 @@ async function updateCameraList() {
 
 // Function to update microphone list
 async function updateMicrophoneList() {
-    //log("updateMicrophoneList");
+    log("updateMicrophoneList");
     try {
         const microphones = await AgoraRTC.getMicrophones();
         console.log("Available microphones:", microphones);
@@ -1651,7 +1651,7 @@ async function updateMicrophoneList() {
         });
         
         // Log the updated microphone devices map
-        //log("Updated microphone devices:");
+        log("Updated microphone devices:");
         //microphoneDevices.forEach((label, deviceId) => {
         //    log(`- ${label || 'Unnamed Microphone'} (${deviceId})`);
         //});
@@ -1692,7 +1692,7 @@ async function updateMicrophoneList() {
 // Helper to log usersInChannel array to the log div
 function logUsersInChannel() {
     return;
-    //log('usersInChannel: ' + JSON.stringify(usersInChannel, null, 2));
+    log('usersInChannel: ' + JSON.stringify(usersInChannel, null, 2));
 }
 
 // Add or update device icons in remote player container
@@ -1902,7 +1902,7 @@ function handleAgentStreamMessage(uid, msgData) {
     };
 
 function handleBracketMatch(text) {
-    //log(text);
+    log(text);
     
     // Change API.svg color based on the text
     if (text.toLowerCase() === 'correct') {
